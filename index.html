@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="以活動數據及排放係數試算全院年度排放及每次血液透析碳足跡。">
+<title>醫院碳排試算</title>
+<style>
+:root{color-scheme:light;--ink:#152e29;--muted:#51655e;--line:#d7e2db;--bg:#f3f6f2;--green:#145747;--accent:#bfe491;--dark:#123c32;--white:#fff;--s1:#146650;--s2:#83b64b;--s3:#6285ad;font-family:"Inter","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.6}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--green);text-underline-offset:3px}
+:focus-visible{outline:3px solid #278975;outline-offset:3px}
+.wrap{width:min(1240px,calc(100% - 64px));margin:auto}
+.top{background:#fff;border-bottom:1px solid var(--line)}
+.top .wrap{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{font-weight:800;display:flex;align-items:center;gap:10px}
+.mark{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:var(--dark);color:#e3f4ce;font-size:13px;letter-spacing:.02em}
+.top a{font-size:13px;font-weight:700;text-decoration:none}
+header{background:var(--dark);color:#f5f9f5;padding:38px 0 42px;border-bottom:5px solid var(--accent)}
+header .wrap{display:flex;justify-content:space-between;gap:24px;align-items:end}
+h1,h2,h3,p{margin:0}
+h1{font-size:clamp(34px,5vw,57px);line-height:1.15;letter-spacing:.025em}
+header p{color:#d0e2d8;margin-top:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.button{background:#fff;border:1px solid #b8cbbf;border-radius:8px;padding:8px 13px;font-weight:700;white-space:nowrap;font-size:13px}
+.button:hover{background:#eaf4ed}
+header .button{background:transparent;color:white;border-color:#709489}
+header .button:hover{background:#245b4d}
+.tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin:20px 0 22px}
+.tab{border:0;border-bottom:3px solid transparent;background:transparent;padding:12px 17px;font-weight:750;color:var(--muted)}
+.tab[aria-pressed=true]{color:var(--green);border-bottom-color:var(--green);background:#e9f2e9;border-radius:8px 8px 0 0}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(275px,345px);gap:22px;align-items:start}
+.card{border:1px solid var(--line);background:var(--white);border-radius:13px}
+.context{padding:17px 19px;margin-bottom:14px}
+.context p,.section-head p,.note{font-size:13px;color:var(--muted)}
+.context-fields{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:12px}
+.context-fields label{min-width:130px;flex:1;font-size:13px;font-weight:750}
+.field-label{display:block;margin-bottom:4px}
+.context-fields .button{min-height:40px}
+input,select{width:100%;min-width:0;background:#fff;border:1px solid #b9cbc2;border-radius:7px;padding:7px 8px;min-height:40px;font-size:14px}
+input::placeholder{color:#61756e}
+input[aria-invalid=true]{border-color:#a23729;background:#fff2ef}
+.groups{display:grid;gap:14px}
+.group{overflow:hidden}
+.section-head{padding:13px 18px 10px;border-bottom:1px solid var(--line);background:#fbfdfb}
+.section-head h2{font-size:16px;display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;background:var(--s1);border-radius:50%;display:inline-block;flex:none}
+.dot.s2{background:var(--s2)}
+.dot.s3{background:var(--s3)}
+.row{display:grid;grid-template-columns:minmax(108px,1.15fr) minmax(90px,.85fr) minmax(95px,.95fr) minmax(93px,.72fr);gap:10px;padding:11px 18px;border-bottom:1px solid #eaf0eb;align-items:center}
+.row:last-child{border:0}
+.row h3,.row output{font-size:13px;overflow-wrap:anywhere}
+.row output{text-align:right;font-variant-numeric:tabular-nums}
+.row small{display:block;color:var(--muted);font-size:11px;font-weight:500}
+.col-label{color:var(--muted);font-size:12px;font-weight:700;background:#fff;padding-block:7px}
+.col-label span:last-child{text-align:right}
+.field-caption{display:none}
+.error{color:#9b2c1f!important}
+.custom-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 18px;border-top:1px solid var(--line)}
+.custom-name{min-height:34px}
+.custom-unit{min-height:34px;margin-top:4px}
+.remove{display:block;margin:5px 0 0 auto;border:0;padding:0;background:none;color:#8b392d;font-size:12px;text-decoration:underline}
+.summary{position:sticky;top:16px}
+.total{border-radius:13px 13px 0 0;background:var(--dark);color:#fff;padding:21px}
+.total h2{font-size:15px;color:#e0f0e5}
+.total strong{display:block;font-size:clamp(32px,4vw,49px);letter-spacing:-.045em;line-height:1.05;margin:11px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.total .unit{font-size:13px;color:#e0f0e5}
+.total .secondary{margin-top:10px;color:#d8efb5;font-weight:650;font-size:14px}
+.breakdown{padding:18px 20px 20px}
+.breakdown h3{font-size:15px;margin-bottom:9px}
+.bar{display:flex;overflow:hidden;height:10px;background:#e5ece6;border-radius:8px;margin:9px 0 12px}
+.bar i{display:block;background:var(--s1)}
+.bar i:nth-child(2){background:var(--s2)}
+.bar i:nth-child(3){background:var(--s3)}
+.legend{display:grid;gap:8px}
+.legend div{display:flex;align-items:center;gap:7px;font-size:13px}
+.legend b{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums}
+.status{border-top:1px solid var(--line);margin-top:16px;padding-top:13px;color:var(--muted);font-size:13px}
+.status p+p{margin-top:6px}
+.download{width:100%;margin-top:14px}
+button:disabled{cursor:default;opacity:.5}
+.method{margin:22px 0 38px;padding:16px 19px}
+.method summary{cursor:pointer;font-weight:750}
+.method p,.method ul{margin:9px 0;font-size:13px;color:var(--muted)}
+.method ul{padding-left:20px}
+[hidden]{display:none!important}
+@media(max-width:950px){.wrap{width:calc(100% - 38px)}.layout{grid-template-columns:minmax(0,1fr) minmax(245px,285px);gap:14px}.row{padding-inline:12px;gap:7px;grid-template-columns:minmax(75px,1fr) minmax(60px,.8fr) minmax(65px,.85fr) minmax(65px,.65fr)}}
+@media(max-width:760px){.layout{display:flex;flex-direction:column}.layout>*{width:100%}.summary{position:static;order:-1}.total{padding:15px 18px}.breakdown{padding:12px 18px}.legend{gap:3px}.status{margin-top:9px;padding-top:7px}.download{margin-top:8px}header .wrap{display:block}.actions{margin-top:15px}header{padding:26px 0}.tabs{margin:13px 0}.wrap{width:calc(100% - 28px)}}
+@media(max-width:480px){.row{grid-template-columns:1fr 1fr;padding:10px 13px}.row h3,.custom-title{grid-column:1/-1}.row output{grid-column:1/-1;text-align:left}.col-label{display:none}.field-caption{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}.custom-title{display:grid;grid-template-columns:1fr 1fr;gap:6px}.custom-unit{margin:0}.tabs .tab{flex:1;padding-inline:5px}.context-fields .button{width:100%}}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap"><div class="brand"><span class="mark">CO₂</span> 醫院碳排試算</div><a href="#method" id="method-link">計算方法與係數來源 ↓</a></div></div>
+<header><div class="wrap"><div><h1>醫院碳排試算</h1><p>輸入活動數據與排放係數，即時查看排放總量與來源占比。</p></div><div class="actions"><button class="button" id="demo" type="button">載入示範</button><button class="button" id="reset" type="button">清空本頁數據</button></div></div></header>
+<main class="wrap">
+<nav class="tabs" aria-label="試算模式"><button class="tab" type="button" data-mode="hospital" aria-pressed="true">全院年度排放</button><button class="tab" type="button" data-mode="dialysis" aria-pressed="false">血液透析服務</button></nav>
+<div class="layout">
+<section aria-label="試算資料">
+<div class="card context">
+<p id="mode-description"></p>
+<div class="context-fields">
+<label><span class="field-label" id="year-label">盤查年度（西元）</span><input id="year" type="number" min="1900" max="2200" step="1" placeholder="例如 2025"></label>
+<label id="sessions-label" hidden><span class="field-label">同期完成透析治療次數</span><input id="sessions" type="number" min="1" step="1" placeholder="例如 36,000"></label>
+<button class="button" id="preset" type="button">套用台電 2025 年係數</button>
+</div>
+<p id="mode-message" style="margin-top:8px" role="status"></p>
+</div>
+<div id="groups" class="groups"></div>
+</section>
+<aside class="card summary" aria-label="排放試算結果">
+<div class="total">
+<h2 id="result-title">已計入的年度排放</h2>
+<strong id="total" aria-live="polite">—</strong>
+<p class="unit" id="result-unit">公噸 CO₂e／年</p>
+<p class="secondary" id="secondary" hidden></p>
+</div>
+<div class="breakdown">
+<h3>排放來源</h3>
+<div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="legend" id="legend"></div>
+<div class="status">
+<p id="counts" aria-live="polite"></p>
+<p id="status-note">空白代表未納入。已確認無排放來源時，可在活動量填 0。</p>
+</div>
+<button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
+</div>
+</aside>
+</div>
+<details class="card method" id="method">
+<summary>計算方法與係數來源</summary>
+<p>各項排放量＝活動量 × 以 kg CO₂e 表示的對應排放係數。全院年度合計以公噸呈現（1 公噸＝1,000 公斤）。透析服務以同期排放量除以完成的透析治療次數。係數已包含 CO₂e 換算時，毋須再乘全球暖化潛勢。</p>
+<p>全院模式按 GHG Protocol 範疇分類。透析模式依服務邊界填報，將共用的製水、空調等先按合理依據分攤至透析服務，再輸入分攤後的數據。請確認耗材、運輸、廢棄物等係數邊界，避免重複計算。結果涵蓋已填報項目，正式盤查、申報或查證須另依適用規範確認邊界、係數及數據品質。</p>
+<ul>
+<li><a href="https://www.moeaea.gov.tw/ECW/PDA.aspx?kind=1&amp;news_id=34473" target="_blank" rel="noopener noreferrer">經濟部能源署 2025 年（民國 114 年）公用售電業電力排碳係數</a> 為 0.467 kg CO₂e／kWh。其他年度、供電來源或電力生命週期邊界請選用適用係數。</li>
+<li><a href="https://ghgregistry.moenv.gov.tw/EPA_GHG/Downloads/FileDownloads.aspx?Type_ID=4" target="_blank" rel="noopener noreferrer">環境部醫院盤查指引與排放係數</a> · <a href="https://data.moenv.gov.tw/dataset/detail/CFP_P_02" target="_blank" rel="noopener noreferrer">環境部碳足跡排放係數資料集</a></li>
+<li><a href="https://www.iso.org/standard/66453.html" target="_blank" rel="noopener noreferrer">ISO 14064-1</a> · <a href="https://ghgprotocol.org/corporate-standard" target="_blank" rel="noopener noreferrer">GHG Protocol Corporate Standard</a> · <a href="https://www.iso.org/standard/71206.html" target="_blank" rel="noopener noreferrer">ISO 14067</a></li>
+</ul>
+<p>試算資料只在目前頁面處理，重新整理即清空。需要留存時可下載 CSV。</p>
+</details>
+</main>
+<script>
+'use strict';
+const byId = id => document.getElementById(id);
+const configurations = {
+  hospital: {
+    description:'填入同一院區或組織邊界的一整年活動量。可依院內排放來源增加自訂項目。',
+    groups:[
+      ['範疇一','直接排放',[['天然氣','m³'],['柴油','L'],['冷媒逸散','kg'],['吸入性麻醉氣體','kg']]],
+      ['範疇二','外購能源間接排放',[['外購電力','kWh'],['外購蒸汽或熱能','kWh']]],
+      ['範疇三','其他價值鏈間接排放',[['自來水','m³'],['委外醫療廢棄物處理','kg'],['採購藥品與耗材','批']]]
+    ],
+    demo:[[[18000,2],[4000,2.7],[20,2000],[25,900]],[[2200000,0.467],[0,'']],[[25000,0.2],[90000,0.9],[120,100]]]
+  },
+  dialysis: {
+    description:'填入同一期間、歸屬於血液透析服務的用量及完成治療次數。用電可包含透析機及已分攤的製水與空調。',
+    groups:[
+      ['能源與用水','治療與分攤後的共用資源',[['用電','kWh'],['自來水','m³']]],
+      ['耗材與藥品','依品項、包裝單位及係數拆列',[['透析器','個'],['血液迴路管組','組'],['透析濃縮液','L'],['其他耗材或藥品','批']]],
+      ['廢棄物與運輸','依選定的服務生命週期邊界填列',[['醫療廢棄物處理','kg'],['一般廢棄物處理','kg'],['病人交通','人公里']]]
+    ],
+    demo:[[[144000,0.467],[6500,0.2]],[[36000,1.8],[36000,0.8],[27000,0.4],[12,300]],[[18000,0.9],[5000,0.35],[0,'']]]
+  }
+};
+const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
+const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
+const emptyState = mode => ({
+  year:'', yearBad:false, powerPreset:false, sessions:'', sessionsBad:false, demo:false, message:'',
+  groups:configurations[mode].groups.map(([, , rows]) => rows.map(([name,unit]) => ({
+    name,unit,amount:'',factor:'',amountBad:false,factorBad:false,custom:false
+  })))
+});
+const state = {hospital:emptyState('hospital'),dialysis:emptyState('dialysis')};
+let mode = 'hospital';
+let rowViews = [];
+let lastResult;
+const numberInput = (label, value, onInput) => {
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.step = 'any';
+  input.inputMode = 'decimal';
+  input.placeholder = '—';
+  input.value = value;
+  input.setAttribute('aria-label',label);
+  input.addEventListener('input', () => onInput(input.value,input.validity.badInput));
+  return input;
+};
+function field(input, text) {
+  const wrapper = document.createElement('div');
+  const caption = document.createElement('span');
+  caption.className = 'field-caption';
+  caption.textContent = text;
+  caption.setAttribute('aria-hidden','true');
+  wrapper.append(caption,input);
+  return wrapper;
+}
+function renderRow(row, group, groupIndex, index) {
+  const item = document.createElement('div');
+  item.className = 'row';
+  const name = document.createElement(row.custom?'div':'h3');
+  const amount = numberInput('',row.amount,(value,bad) => {
+    row.amount=value;
+    row.amountBad=bad;
+    calculate();
+  });
+  const factor = numberInput('',row.factor,(value,bad) => {
+    const data=state[mode];
+    if(row===data.groups[mode==='hospital'?1:0][0] && data.powerPreset){
+      data.powerPreset=false;
+      data.message='';
+    }
+    row.factor=value;
+    row.factorBad=bad;
+    calculate();
+  });
+  const result = document.createElement('output');
+  const setLabels = () => {
+    const label = row.name.trim() || '自訂項目';
+    const unit = row.unit.trim() || '單位';
+    amount.setAttribute('aria-label',label+' 活動量（'+unit+'）');
+    factor.setAttribute('aria-label',label+' 排放係數（kg CO₂e／'+unit+'）');
+    result.setAttribute('aria-label',label+' 排放量');
+    amountField.firstChild.textContent = '活動量（'+unit+'）';
+    factorField.firstChild.textContent = '排放係數（kg CO₂e／'+unit+'）';
+  };
+  const amountField = field(amount,'活動量');
+  const factorField = field(factor,'排放係數');
+  if(row.custom){
+    name.className = 'custom-title';
+    for(const [key,placeholder] of [['name','項目名稱'],['unit','活動量單位']]){
+      const input = document.createElement('input');
+      input.placeholder = placeholder;
+      input.setAttribute('aria-label',placeholder);
+      input.className = 'custom-'+key;
+      input.value = row[key];
+      input.addEventListener('input',() => {row[key]=input.value;setLabels();calculate()});
+      name.append(input);
+    }
+    const remove = document.createElement('button');
+    remove.className = 'remove';
+    remove.type = 'button';
+    remove.textContent = '移除';
+    remove.setAttribute('aria-label','移除此自訂排放項目');
+    remove.addEventListener('click',() => {
+      group.splice(index,1);
+      render();
+      byId('add-'+groupIndex).focus();
+    });
+    item.append(name,amountField,factorField,result);
+    result.after(remove);
+    remove.style.gridColumn='1 / -1';
+  } else {
+    const unit = document.createElement('small');
+    unit.textContent = row.unit;
+    name.append(row.name,unit);
+    item.append(name,amountField,factorField,result);
+  }
+  setLabels();
+  rowViews.push({row,groupIndex,amount,factor,result});
+  return item;
+}
+function render(){
+  const data = state[mode];
+  const config = configurations[mode];
+  const dialysis = mode === 'dialysis';
+  document.querySelectorAll('[data-mode]').forEach(tab => tab.setAttribute('aria-pressed',String(tab.dataset.mode===mode)));
+  byId('mode-description').textContent = config.description;
+  byId('year-label').textContent = dialysis?'資料年度（西元）':'盤查年度（西元）';
+  byId('year').value = data.year;
+  byId('sessions').value = data.sessions;
+  byId('sessions-label').hidden = !dialysis;
+  byId('result-title').textContent = dialysis?'每次透析已計入排放':'已計入的年度排放';
+  byId('result-unit').textContent = dialysis?'公斤 CO₂e／次':'公噸 CO₂e／年';
+  rowViews=[];
+  const container = byId('groups');
+  container.replaceChildren();
+  config.groups.forEach(([title,subtitle],groupIndex) => {
+    const section=document.createElement('section');
+    section.className='card group';
+    const head=document.createElement('div');
+    head.className='section-head';
+    head.innerHTML='<h2><i aria-hidden="true" class="dot s'+(groupIndex+1)+'"></i>'+title+'</h2><p>'+subtitle+'</p>';
+    const columns=document.createElement('div');
+    columns.className='row col-label';
+    columns.innerHTML='<span>排放項目</span><span>活動量</span><span>係數（kg CO₂e／單位）</span><span>排放量（kg CO₂e）</span>';
+    section.append(head,columns);
+    const group=data.groups[groupIndex];
+    group.forEach((row,index) => section.append(renderRow(row,group,groupIndex,index)));
+    const bar=document.createElement('div');
+    bar.className='custom-bar';
+    const add=document.createElement('button');
+    add.id='add-'+groupIndex;
+    add.className='button';
+    add.type='button';
+    add.textContent='+ 新增項目';
+    add.setAttribute('aria-label','在'+title+'新增項目');
+    add.addEventListener('click',() => {
+      group.push({name:'',unit:'',amount:'',factor:'',amountBad:false,factorBad:false,custom:true});
+      render();
+      byId('add-'+groupIndex).parentElement.parentElement.querySelector('.row:nth-last-child(2) .custom-name').focus();
+    });
+    bar.append(add);
+    section.append(bar);
+    container.append(section);
+  });
+  calculate();
+}
+function assess(row){
+  const amount = Number(row.amount);
+  const factor = Number(row.factor);
+  const amountInvalid = row.amountBad || !Number.isFinite(amount) || amount < 0;
+  const factorInvalid = row.factorBad || !Number.isFinite(factor) || factor < 0;
+  const result = amount * factor;
+  if(amountInvalid || factorInvalid || !Number.isFinite(result)){
+    return {status:'數值無效',amountInvalid:amountInvalid||!Number.isFinite(result),factorInvalid:factorInvalid||!Number.isFinite(result)};
+  }
+  if(row.amount === '') return {status:row.factor === ''?'未填':'待填活動量'};
+  if(amount !== 0 && row.factor === '') return {status:'待填係數'};
+  if(row.custom && (!row.name.trim() || !row.unit.trim())) return {status:'待填名稱或單位'};
+  return {status:'已計入',value:result};
+}
+function calculate(){
+  const data=state[mode];
+  const dialysis=mode==='dialysis';
+  const subtotals=[0,0,0], included=[0,0,0];
+  let omitted=0, incomplete=0;
+  const rows=rowViews.map(({row,groupIndex,amount,factor,result}) => {
+    const assessed=assess(row);
+    amount.setAttribute('aria-invalid',String(Boolean(assessed.amountInvalid)));
+    factor.setAttribute('aria-invalid',String(Boolean(assessed.factorInvalid)));
+    const valid=assessed.value!==undefined;
+    result.textContent=valid?formatValue(assessed.value)+' kg':assessed.status==='未填'?'—':assessed.status;
+    result.classList.toggle('error',!valid && assessed.status!=='未填');
+    if(valid){subtotals[groupIndex]+=assessed.value;included[groupIndex]++}
+    else if(assessed.status==='未填'){omitted++}
+    else {incomplete++}
+    return {...row,...assessed,groupIndex};
+  });
+  const total=subtotals.reduce((a,b)=>a+b,0);
+  const count=included.reduce((a,b)=>a+b,0);
+  const year=Number(data.year), sessions=Number(data.sessions);
+  const yearInvalid=data.yearBad || (data.year!=='' && (!Number.isInteger(year)||year<1900||year>2200));
+  const sessionsValid=!data.sessionsBad && Number.isSafeInteger(sessions) && sessions>0;
+  const aggregateValid=Number.isFinite(total);
+  const mainResult=count&&aggregateValid&&(!dialysis||sessionsValid)?(dialysis?total/sessions:total/1000):null;
+  byId('year').setAttribute('aria-invalid',String(yearInvalid));
+  byId('sessions').setAttribute('aria-invalid',String(data.sessionsBad||(data.sessions!==''&&!sessionsValid)));
+  byId('total').textContent=mainResult===null?'—':formatValue(mainResult);
+  byId('secondary').hidden=!(dialysis&&count&&aggregateValid);
+  byId('secondary').textContent='同期合計 '+(aggregateValid?formatValue(total):'—')+' 公斤 CO₂e';
+  byId('counts').textContent='已計入 '+count+' 項 · 未填 '+omitted+' 項'+(incomplete?' · 待補或無效 '+incomplete+' 項':'');
+  byId('status-note').textContent=!aggregateValid?'合計超出計算範圍，請檢查輸入。':dialysis&&!sessionsValid?'每次排放需填入大於 0 的整數治療次數。':'空白代表未納入。已確認無排放來源時，可在活動量填 0。';
+  const messages=[];
+  if(data.demo) messages.push('示範資料包含假設係數，僅供操作練習。');
+  if(data.message) messages.push(data.message);
+  if(yearInvalid) messages.push('請輸入有效的西元年度。');
+  byId('mode-message').textContent=messages.join(' ');
+  const legend=byId('legend');
+  legend.replaceChildren();
+  configurations[mode].groups.forEach(([title],i) => {
+    const percent=aggregateValid&&total>0?subtotals[i]/total*100:0;
+    document.querySelectorAll('.bar i')[i].style.width=percent+'%';
+    const entry=document.createElement('div');
+    const dot=document.createElement('i');
+    dot.className='dot s'+(i+1);
+    dot.setAttribute('aria-hidden','true');
+    const label=document.createElement('span');
+    label.textContent=title;
+    const value=document.createElement('b');
+    const divisor=dialysis?1:1000;
+    const unit=dialysis?' kg':' t';
+    value.textContent=included[i]&&aggregateValid?formatValue(subtotals[i]/divisor)+unit+(total>0?' · '+formatValue(percent)+'%':''):'—';
+    entry.append(dot,label,value);
+    legend.append(entry);
+  });
+  byId('download').disabled=!count||!aggregateValid||yearInvalid;
+  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid};
+}
+document.querySelectorAll('[data-mode]').forEach(tab => tab.addEventListener('click',() => {mode=tab.dataset.mode;render()}));
+for(const id of ['year','sessions']){
+  byId(id).addEventListener('input',event => {
+    const data=state[mode];
+    data[id]=event.target.value;
+    data[id+'Bad']=event.target.validity.badInput;
+    if(id==='year' && Number(data.year)!==2025 && data.powerPreset){
+      const row=data.groups[mode==='hospital'?1:0][0];
+      row.factor='';
+      const view=rowViews.find(view=>view.row===row);
+      view.factor.value='';
+      data.powerPreset=false;
+      data.message='年度已變更，請填入相符的電力係數。';
+    }
+    calculate();
+  });
+}
+byId('preset').addEventListener('click',() => {
+  const data=state[mode];
+  if(data.yearBad || (data.year!=='' && Number(data.year)!==2025)){
+    data.message='此係數適用於 2025 年。請輸入該年度，或自行填入相符的係數。';
+    calculate();
+    return;
+  }
+  data.year='2025';
+  const row=data.groups[mode==='hospital'?1:0][0];
+  row.factor='0.467';
+  row.factorBad=false;
+  data.powerPreset=true;
+  data.message=mode==='hospital'?'已套用 0.467 kg CO₂e／kWh。':'已套用 0.467 kg CO₂e／kWh 作為用電試算值。若納入上游電力生命週期，請換用符合邊界的係數。';
+  render();
+});
+byId('demo').addEventListener('click',() => {
+  if((lastResult.count||lastResult.incomplete) && !confirm('載入示範將取代本模式的輸入，確定繼續？')) return;
+  const data=emptyState(mode);
+  data.year='2025';
+  data.sessions=mode==='dialysis'?'36000':'';
+  data.demo=true;
+  data.powerPreset=true;
+  data.groups.forEach((group,i) => group.forEach((row,j) => {
+    [row.amount,row.factor]=configurations[mode].demo[i][j].map(String);
+  }));
+  state[mode]=data;
+  render();
+});
+byId('reset').addEventListener('click',() => {
+  const data=state[mode];
+  if((lastResult.count||lastResult.incomplete||data.year||data.sessions||data.groups.some(group=>group.some(row=>row.custom))) && !confirm('確定清空本模式的輸入？')) return;
+  state[mode]=emptyState(mode);
+  render();
+});
+byId('method-link').addEventListener('click',() => {byId('method').open=true});
+byId('download').addEventListener('click',() => {
+  const data=state[mode], dialysis=mode==='dialysis';
+  const results=lastResult;
+  const lines=[
+    ['模式',dialysis?'血液透析服務':'全院年度排放'],
+    ['年度（西元）',data.year],
+    ['資料','已計入項目之試算'+(data.demo?'（含示範數據）':'')],
+    ['合計（kg CO₂e）',results.total],
+    [dialysis?'每次透析（kg CO₂e／次）':'年度排放（t CO₂e／年）',results.mainResult??''],
+    ...(dialysis?[['同期完成透析次數',results.sessionsValid?data.sessions:'']]:[]),
+    ['已計入項目數',results.count],['未填項目數',results.omitted],['待補或無效項目數',results.incomplete],
+    [],
+    ['類別','項目','活動量單位','活動量','係數（kg CO₂e／單位）','排放（kg CO₂e）','狀態'],
+    ...results.rows.map(row=>[configurations[mode].groups[row.groupIndex][0],row.name,row.unit,row.amount,row.factor,row.value??'',row.status])
+  ];
+  const escape=value=>{
+    let text=String(value);
+    if(typeof value==='string'&&/^[\s]*[=+\-@\t\r\n]/.test(text)) text="'"+text;
+    return '"'+text.replaceAll('"','""')+'"';
+  };
+  const csv='\uFEFF'+lines.map(line=>line.map(escape).join(',')).join('\r\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const anchor=document.createElement('a');
+  anchor.href=url;
+  anchor.download=(dialysis?'dialysis-carbon':'hospital-carbon')+(data.year?'-'+data.year:'')+'.csv';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+render();
+</script>
+</body>
+</html>

@@ -47,6 +47,13 @@ header .button:hover{background:#245b4d}
 .context-fields label{min-width:130px;flex:1;font-size:13px;font-weight:750}
 .field-label{display:block;margin-bottom:4px}
 .context-fields .button{min-height:40px}
+.scale{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.scale h2{font-size:15px}
+.scale .context-fields{margin-block:9px}
+.scale-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.scale-note{margin-top:5px}
+#scale-summary{margin-top:6px;font-weight:700;color:var(--green)}
+#scale-summary:empty{display:none}
 input,select{width:100%;min-width:0;background:#fff;border:1px solid #b9cbc2;border-radius:7px;padding:7px 8px;min-height:40px;font-size:14px}
 input::placeholder{color:#61756e}
 input[aria-invalid=true]{border-color:#a23729;background:#fff2ef}
@@ -143,10 +150,24 @@ button:disabled{cursor:default;opacity:.5}
 <p id="mode-description"></p>
 <div class="context-fields">
 <label><span class="field-label" id="year-label">盤查年度（西元）</span><input id="year" type="number" min="1900" max="2200" step="1" placeholder="例如 2025"></label>
-<label id="sessions-label" hidden><span class="field-label">同期完成透析治療次數</span><input id="sessions" type="number" min="1" step="1" placeholder="例如 36,000"></label>
+<label id="sessions-label" hidden><span class="field-label">同期實際完成透析次數</span><input id="sessions" type="number" min="1" step="1" placeholder="例如 36,000"></label>
 <button class="button" id="preset" type="button">套用台電 2025 年係數</button>
 </div>
 <p id="mode-message" style="margin-top:8px" role="status"></p>
+<div class="scale">
+<div class="scale-head"><h2>院區規模與服務量</h2><button class="button" id="beigang" type="button">帶入北港附醫規模</button></div>
+<div class="context-fields" id="hospital-scale">
+<label><span class="field-label">院區住院床數（床）</span><input id="beds" type="number" min="1" step="1" placeholder="例如 481"></label>
+</div>
+<div class="context-fields" id="dialysis-scale" hidden>
+<label><span class="field-label">透析床數（床）</span><input id="chairs" type="number" min="1" step="1" placeholder="例如 60"></label>
+<label><span class="field-label">月均透析量估計（次）</span><input id="monthly" type="number" min="1" step="1" placeholder="例如 3,000"></label>
+<label><span class="field-label">活動數據涵蓋月數</span><input id="months" type="number" min="1" max="12" step="1" placeholder="整年填 12"></label>
+</div>
+<p class="scale-note" id="scale-note"></p>
+<p class="scale-note">院方公告可查閱 <a href="https://www2.bh.cmu.edu.tw/Announce/CurrentBedAvailability" target="_blank" rel="noopener noreferrer">住院床位</a>與<a href="https://www2.bh.cmu.edu.tw/Department/History?depid=185" target="_blank" rel="noopener noreferrer">透析床位</a>。每月約 3,000 次為北港附醫規模試算參考值。</p>
+<p id="scale-summary"></p>
+</div>
 </div>
 <div id="groups" class="groups"></div>
 </section>
@@ -164,6 +185,7 @@ button:disabled{cursor:default;opacity:.5}
 <div class="status">
 <p id="counts" aria-live="polite"></p>
 <p id="status-note">空白代表未納入。已確認無排放來源時，可在活動量填 0。</p>
+<p id="intensity" hidden></p>
 </div>
 <button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
 <a class="compare-link" href="#advice">查看減碳建議 ↓</a>
@@ -322,7 +344,10 @@ const reductionActions = {
 };
 const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
 const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
+const scaleFields=['beds','chairs','monthly','months'];
+const countFields=['sessions',...scaleFields];
 const emptyState = mode => ({
+  scale:{},
   year:'', yearBad:false, powerPreset:false, sessions:'', sessionsBad:false, travelCoverage:'unknown', example:'', message:'',
   groups:configurations[mode].groups.map(([, , rows]) => rows.map(([name,unit]) => ({
     name,unit,amount:'',factor:'',amountBad:false,factorBad:false,custom:false
@@ -428,6 +453,12 @@ function render(){
   byId('year').value = data.year;
   byId('sessions').value = data.sessions;
   byId('sessions-label').hidden = !dialysis;
+  byId('hospital-scale').hidden=dialysis;
+  byId('dialysis-scale').hidden=!dialysis;
+  for(const id of scaleFields) byId(id).value=data.scale[id]??'';
+  byId('scale-note').textContent=dialysis
+    ?'實際透析次數優先。若實際次數留白，才以月均次數乘以同期間月數估算。請輸入同期歸屬透析的活動量。透析用電若已納入全院用電，計算全院總量時只計一次。'
+    :'請填盤查年度相同院區的床數，用於計算範疇一＋二每床排放強度。北港附醫的 481 床依院方公告口徑，排除急觀、嬰兒、透析及手術恢復床。';
   byId('travel-controls').hidden = !dialysis;
   byId('travel-coverage').value = data.travelCoverage;
   byId('result-title').textContent = dialysis?'每次透析已計入排放':'已計入的年度排放';
@@ -480,6 +511,21 @@ function assess(row){
   if(row.custom && (!row.name.trim() || !row.unit.trim())) return {status:'待填名稱或單位'};
   return {status:'已計入',value:result};
 }
+function assessCounts(data){
+  const raw={...data.scale,sessions:data.sessions,sessionsBad:data.sessionsBad};
+  const values={}, invalid={};
+  for(const id of countFields){
+    const value=Number(raw[id]);
+    invalid[id]=Boolean(raw[id+'Bad'] || (raw[id] && (!Number.isSafeInteger(value) || value<1 || (id==='months'&&value>12))));
+    values[id]=invalid[id]||!raw[id]?null:value;
+    byId(id).setAttribute('aria-invalid',String(invalid[id]));
+  }
+  const projection=values.monthly*values.months;
+  const estimated=!invalid.sessions&&values.sessions===null&&projection>0&&Number.isSafeInteger(projection);
+  const sessions=values.sessions??(estimated?projection:null);
+  const sessionsPerChair=values.chairs && values.months && sessions ? sessions/values.months/values.chairs : null;
+  return {...values,sessions,sessionsPerChair,estimated};
+}
 function calculate(){
   const data=state[mode];
   const dialysis=mode==='dialysis';
@@ -499,18 +545,31 @@ function calculate(){
   });
   const total=subtotals.reduce((a,b)=>a+b,0);
   const count=included.reduce((a,b)=>a+b,0);
-  const year=Number(data.year), sessions=Number(data.sessions);
+  const year=Number(data.year);
+  const scale=assessCounts(data);
+  const sessions=scale.sessions;
   const yearInvalid=data.yearBad || (data.year!=='' && (!Number.isInteger(year)||year<1900||year>2200));
-  const sessionsValid=!data.sessionsBad && Number.isSafeInteger(sessions) && sessions>0;
+  const sessionsValid=sessions!==null;
+  const scopeTotal=subtotals[0]+subtotals[1];
+  const perBed=!dialysis&&scale.beds&&(included[0]+included[1])&&Number.isFinite(scopeTotal)?scopeTotal/1000/scale.beds:null;
   const aggregateValid=Number.isFinite(total);
   const mainResult=count&&aggregateValid&&(!dialysis||sessionsValid)?(dialysis?total/sessions:total/1000):null;
   byId('year').setAttribute('aria-invalid',String(yearInvalid));
-  byId('sessions').setAttribute('aria-invalid',String(data.sessionsBad||(data.sessions!==''&&!sessionsValid)));
   byId('total').textContent=mainResult===null?'—':formatValue(mainResult);
   byId('secondary').hidden=!(dialysis&&count&&aggregateValid);
   byId('secondary').textContent='同期合計 '+(aggregateValid?formatValue(total):'—')+' 公斤 CO₂e';
+  const capacity=[];
+  if(dialysis){
+    if(sessionsValid) capacity.push((scale.estimated?'同期估計 ':'同期實填 ')+formatValue(sessions)+' 次');
+    if(scale.sessionsPerChair!==null) capacity.push((scale.estimated?'約 ':'')+formatValue(scale.sessionsPerChair)+' 次／透析床／月');
+  }else if(scale.beds) capacity.push('計入 '+formatValue(scale.beds)+' 張住院床');
+  byId('scale-summary').textContent=capacity.join(' · ');
+  byId('intensity').hidden=perBed===null&&!(dialysis&&scale.estimated);
+  byId('intensity').textContent=perBed!==null
+    ?'已計入的範疇一＋二強度 '+formatValue(perBed)+' 公噸 CO₂e／住院床／年'
+    :dialysis&&scale.estimated?'每次排放以 '+formatValue(sessions)+' 次估算，請以同期實際次數覆核。':'';
   byId('counts').textContent='已計入 '+count+' 項 · 未填 '+omitted+' 項'+(incomplete?' · 待補或無效 '+incomplete+' 項':'');
-  byId('status-note').textContent=!aggregateValid?'合計超出計算範圍，請檢查輸入。':dialysis&&!sessionsValid?'每次排放需填入大於 0 的整數治療次數。':'空白代表未納入。已確認無排放來源時，可在活動量填 0。';
+  byId('status-note').textContent=!aggregateValid?'合計超出計算範圍，請檢查輸入。':dialysis&&!sessionsValid?'每次排放需填入同期實際次數，或有效的月均次數與涵蓋月數。':'空白代表未納入。已確認無排放來源時，可在活動量填 0。';
   const messages=[];
   if(data.example) messages.push('示範案例「'+data.example+'」含假設係數，僅供操作練習。');
   if(data.message) messages.push(data.message);
@@ -535,7 +594,7 @@ function calculate(){
     legend.append(entry);
   });
   byId('download').disabled=!count||!aggregateValid||yearInvalid;
-  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid};
+  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid,scale,perBed};
   renderComparison(lastResult);
   renderAdvice(lastResult);
 }
@@ -557,12 +616,13 @@ function renderAdvice(result){
     const unassessed=result.omitted+result.incomplete;
     if(unassessed) messages.push('尚有 '+unassessed+' 項未填或無效，排序僅依已計入的項目。');
     if(dialysis&&!result.sessionsValid) messages.push('尚未填妥治療次數，目前以同期總量呈現。');
+    if(dialysis&&result.scale.estimated) messages.push('每次減量以估計治療次數換算。');
   }
   byId('advice-status').hidden=messages.length===0;
   byId('advice-status').textContent=messages.join(' ');
   if(!available) return;
 
-  const divisor=dialysis?(result.sessionsValid?Number(state[mode].sessions):1):1000;
+  const divisor=dialysis?(result.scale.sessions??1):1000;
   const unit=dialysis?(result.sessionsValid?'公斤 CO₂e／次':'公斤 CO₂e／同期'):'公噸 CO₂e／年';
   for(const row of leaders){
     const item=document.createElement('li');
@@ -600,7 +660,7 @@ function renderComparison(result){
   const serviceRows=included.filter(row=>row!==travelRow);
   const serviceTotal=serviceRows.reduce((sum,row)=>sum+row.value,0);
   const canCompareService=result.sessionsValid&&serviceRows.length>0&&Number.isFinite(serviceTotal);
-  const sessions=Number(data.sessions);
+  const sessions=result.scale.sessions;
   const ownScope=hospitalIncluded.length&&Number.isFinite(scopeTotal)?scopeTotal:null;
   const ownWithout=canCompareService?serviceTotal/sessions:null;
   const ownWith=canCompareService&&data.travelCoverage==='included'&&travel!==undefined&&Number.isFinite(result.total)
@@ -640,6 +700,7 @@ function renderComparison(result){
   if(data.example) messages.push('目前顯示模擬案例。');
   if(dialysis){
     if(!canCompareService) messages.push('填入有效的同期治療次數及至少一項服務排放後，才會顯示您的數值。');
+    if(result.scale.estimated) messages.push('您的每次透析排放以 '+formatValue(sessions)+' 次估算。');
     if(ownWith===null) messages.push('含病人交通的對照需填妥「病人交通」欄，並確認已完整填報。');
     if(data.travelCoverage==='excluded' && travel>0) messages.push('目前「病人交通」欄有正值，請確認盤查邊界設定。');
     if(result.omitted+result.incomplete>0) messages.push('尚有 '+(result.omitted+result.incomplete)+' 個項目未填或無效，請核對應納入的排放。');
@@ -680,6 +741,24 @@ for(const id of ['year','sessions']){
     calculate();
   });
 }
+for(const id of scaleFields){
+  byId(id).addEventListener('input',event=>{
+    const data=state[mode];
+    data.scale[id]=event.target.value;
+    data.scale[id+'Bad']=event.target.validity.badInput;
+    calculate();
+  });
+}
+byId('beigang').addEventListener('click',()=>{
+  const data=state[mode];
+  const defaults=mode==='hospital'?{beds:'481'}:{chairs:'60',monthly:'3000'};
+  if(mode==='dialysis' && !data.sessions && !data.sessionsBad &&
+      !data.groups.some(group=>group.some(row=>row.amount||row.amountBad))) defaults.months='12';
+  for(const [id,value] of Object.entries(defaults)){
+    if(!data.scale[id]&&!data.scale[id+'Bad']) data.scale[id]=value;
+  }
+  render();
+});
 byId('preset').addEventListener('click',() => {
   const data=state[mode];
   if(data.yearBad || (data.year!=='' && Number(data.year)!==2025)){
@@ -722,7 +801,7 @@ for(const example of examples){
   button.append(description);
   button.addEventListener('click',() => {
     const current=state[example.mode];
-    const hasInput=current.year||current.sessions||current.yearBad||current.sessionsBad||
+    const hasInput=current.year||current.sessions||current.yearBad||current.sessionsBad||Object.values(current.scale).some(Boolean)||
       current.groups.some(group => group.some(row => row.amount||row.factor||row.amountBad||row.factorBad||row.custom));
     if(hasInput && !confirm('載入案例將取代該試算模式的輸入，確定繼續？')) return;
     const data=emptyState(example.mode);
@@ -744,7 +823,7 @@ for(const example of examples){
 }
 byId('reset').addEventListener('click',() => {
   const data=state[mode];
-  if((lastResult.count||lastResult.incomplete||data.year||data.sessions||data.groups.some(group=>group.some(row=>row.custom))) && !confirm('確定清空本模式的輸入？')) return;
+  if((lastResult.count||lastResult.incomplete||data.year||data.sessions||Object.values(data.scale).some(Boolean)||data.groups.some(group=>group.some(row=>row.custom))) && !confirm('確定清空本模式的輸入？')) return;
   state[mode]=emptyState(mode);
   render();
 });
@@ -758,7 +837,17 @@ byId('download').addEventListener('click',() => {
     ['資料',data.example?'含示範數據（'+data.example+'）':'已計入項目之試算'],
     ['合計（kg CO₂e）',results.total],
     [dialysis?'每次透析（kg CO₂e／次）':'年度排放（t CO₂e／年）',results.mainResult??''],
-    ...(dialysis?[['同期完成透析次數',results.sessionsValid?data.sessions:'']]:[]),
+    ...(dialysis?[
+      ['同期透析次數（採用值）',results.scale.sessions??''],
+      ['同期透析次數來源',results.scale.estimated?'月均次數 × 同期月數（估計）':results.sessionsValid?'實際填報':''],
+      ['透析床數',results.scale.chairs??''],
+      ['月均透析量估計',results.scale.monthly??''],
+      ['活動數據涵蓋月數',results.scale.months??''],
+      ['每透析床每月服務量',results.scale.sessionsPerChair??'']
+    ]:[
+      ['住院床數',results.scale.beds??''],
+      ['已計入範疇一＋二強度（t CO₂e／住院床／年）',results.perBed??'']
+    ]),
     ['已計入項目數',results.count],['未填項目數',results.omitted],['待補或無效項目數',results.incomplete],
     [],
     ['類別','項目','活動量單位','活動量','係數（kg CO₂e／單位）','排放（kg CO₂e）','狀態'],

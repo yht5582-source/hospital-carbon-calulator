@@ -122,6 +122,14 @@ button:disabled{cursor:default;opacity:.5}
 .compare-table td{font-variant-numeric:tabular-nums}
 .compare-table td:last-child{font-weight:750}
 .compare-table tr:last-child>*{border-bottom:0}
+.peer{border:1px solid var(--line);border-radius:9px;padding:13px;margin:13px 0 18px}
+.peer h3{font-size:16px}
+.peer .context-fields{margin-block:9px}
+.peer-confirm{display:flex;align-items:flex-start;gap:8px;font-size:13px;margin-top:10px}
+.peer-confirm input{width:17px;min-height:17px;margin:3px 0 0;flex:none}
+.peer .peer-result{margin:9px 0 0;background:#f3f6f2;padding:9px 11px;border-radius:7px;font-weight:750;color:var(--ink)}
+.peer .peer-result[data-level="lower"]{background:#e9f4e8;color:#145747}
+.peer .peer-result[data-level="higher"]{background:#fff0e4;color:#763b15}
 .comparison .compare-status{background:#f3f6f2;border-radius:7px;padding:8px 10px;margin:8px 0}
 @media(max-width:540px){.comparison{padding:13px 11px}.compare-table th,.compare-table td{padding:8px 5px}.compare-table{font-size:12px}.compare-table small{font-size:11px}}
 .method{margin:22px 0 38px;padding:16px 19px}
@@ -189,7 +197,7 @@ button:disabled{cursor:default;opacity:.5}
 </div>
 <button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
 <a class="compare-link" href="#advice">查看減碳建議 ↓</a>
-<a class="compare-link" href="#comparison">查看同類場域比較 ↓</a>
+<a class="compare-link" href="#comparison">查看同規模排放比較 ↓</a>
 </div>
 </aside>
 </div>
@@ -223,6 +231,27 @@ button:disabled{cursor:default;opacity:.5}
 </select>
 <p id="travel-note">有多種交通方式時，可在「病人交通」欄填入合計人公里及依人公里加權的排放係數。</p>
 </div>
+<section class="peer" aria-labelledby="peer-title">
+<h3 id="peer-title">同規模排放強度判讀</h3>
+<p id="peer-metric"></p>
+<div class="context-fields" id="peer-hospital">
+<label><span class="field-label">比較基準</span><select id="peer-basis">
+<option value="public">國軍臺中總醫院（每住院人日）</option>
+<option value="days">自填同規模區間（每住院人日）</option>
+<option value="beds">自填同規模區間（每床每年）</option>
+</select></label>
+<label id="peer-days-label"><span class="field-label">本院同年度住院人日</span><input id="peer-days" type="number" min="1" step="1" placeholder="填住院人日合計"></label>
+</div>
+<div class="context-fields" id="peer-custom" hidden>
+<label><span class="field-label">同規模參考下限</span><input id="peer-low" type="number" min="0" step="any"></label>
+<label><span class="field-label">同規模參考上限</span><input id="peer-high" type="number" min="0" step="any"></label>
+</div>
+<p id="peer-source"><a href="https://803.mnd.gov.tw/esg/environmental-sustainability/energy-management/" target="_blank" rel="noopener noreferrer">國軍臺中總醫院公開排放強度</a> · <a href="https://web-reg-server.803.org.tw/803/bedratio_803.html" target="_blank" rel="noopener noreferrer">院方床位資料</a></p>
+<p id="peer-check-note"></p>
+<label class="peer-confirm"><input id="peer-confirm" type="checkbox" aria-describedby="peer-check-note">我已確認本次盤查完整，且與參考機構的比較口徑相近</label>
+<p class="peer-result" id="peer-result" role="status"></p>
+<p>比較結果用於辨識排放改善空間。住院強度也會受門急診服務量、照護組合及佔床率影響。</p>
+</section>
 <table class="compare-table">
 <thead><tr><th scope="col">來源與盤查邊界</th><th scope="col">公開參考值</th><th scope="col">您的試算</th></tr></thead>
 <tbody id="compare-rows"></tbody>
@@ -344,10 +373,12 @@ const reductionActions = {
 };
 const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
 const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
+const peerFields=['peer-basis','peer-days','peer-low','peer-high'];
+const hospitalPeerRates={2024:33.67,2025:33.18};
 const scaleFields=['beds','chairs','monthly','months'];
 const countFields=['sessions',...scaleFields];
 const emptyState = mode => ({
-  scale:{},
+  scale:{}, peer:{},
   year:'', yearBad:false, powerPreset:false, sessions:'', sessionsBad:false, travelCoverage:'unknown', example:'', message:'',
   groups:configurations[mode].groups.map(([, , rows]) => rows.map(([name,unit]) => ({
     name,unit,amount:'',factor:'',amountBad:false,factorBad:false,custom:false
@@ -461,6 +492,8 @@ function render(){
     :'請填盤查年度相同院區的床數，用於計算範疇一＋二每床排放強度。北港附醫的 481 床依院方公告口徑，排除急觀、嬰兒、透析及手術恢復床。';
   byId('travel-controls').hidden = !dialysis;
   byId('travel-coverage').value = data.travelCoverage;
+  for(const id of peerFields) byId(id).value=data.peer[id]??(id==='peer-basis'?'public':'');
+  byId('peer-confirm').checked=Boolean(data.peer.confirmed);
   byId('result-title').textContent = dialysis?'每次透析已計入排放':'已計入的年度排放';
   byId('result-unit').textContent = dialysis?'公斤 CO₂e／次':'公噸 CO₂e／年';
   rowViews=[];
@@ -594,7 +627,7 @@ function calculate(){
     legend.append(entry);
   });
   byId('download').disabled=!count||!aggregateValid||yearInvalid;
-  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid,scale,perBed};
+  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid,scale,perBed,scopeTotal,yearInvalid};
   renderComparison(lastResult);
   renderAdvice(lastResult);
 }
@@ -719,9 +752,88 @@ function renderComparison(result){
   link.rel='noopener noreferrer';
   link.textContent=dialysis?'ISO 14067':'ISO 14064-1';
   standard.replaceChildren(link,' 規範量化與報告方法。表中公開數值供參考，沒有通用的合格門檻。');
+  renderPeerComparison(result,ownWithout,ownWith,travel);
 }
+function renderPeerComparison(result,ownWithout,ownWith,travel){
+  const data=state[mode];
+  const dialysis=mode==='dialysis';
+  const peer=data.peer;
+  const basis=dialysis?'sessions':peer['peer-basis']??'public';
+  const unit=dialysis?'公斤 CO₂e／次':basis==='beds'?'公噸 CO₂e／床／年':'公斤 CO₂e／住院人日';
+  const isPublic=basis==='public';
+  byId('peer-hospital').hidden=dialysis;
+  byId('peer-days-label').hidden=basis==='beds';
+  byId('peer-custom').hidden=isPublic;
+  byId('peer-source').hidden=!isPublic;
+  byId('peer-metric').textContent=(dialysis?'血液透析':'年度範疇一＋二')+' · '+unit;
+  byId('peer-check-note').textContent=dialysis
+    ?'請選擇床數、同期透析量及治療時數相近的機構，並核對耗材、能源及病人交通的納入方式。'
+    :'請核對同年度、相近床數及服務結構、範疇一與二的盤查邊界，並使用同口徑的住院人日或床數。';
+  const publicRate=hospitalPeerRates[Number(data.year)];
+  const days=Number(peer['peer-days']);
+  const low=isPublic?publicRate:Number(peer['peer-low']);
+  const high=isPublic?publicRate:Number(peer['peer-high']);
+  const rangeValid=Number.isFinite(low)&&Number.isFinite(high)&&low>=0&&high>=low&&high>0&&
+    (isPublic||Boolean(peer['peer-low']&&peer['peer-high']&&!peer['peer-low-bad']&&!peer['peer-high-bad']));
+  const validDays=!peer['peer-days-bad']&&Number.isSafeInteger(days)&&days>0;
+  const own=dialysis
+    ?(data.travelCoverage==='included'?ownWith:data.travelCoverage==='excluded'&&!(travel>0)?ownWithout:null)
+    :basis==='beds'?result.perBed:validDays&&Number.isFinite(result.scopeTotal)?result.scopeTotal/days:null;
+  const scopeRows=result.rows.filter(row=>row.groupIndex<2);
+  const hasScopeData=[0,1].every(group=>scopeRows.some(row=>row.groupIndex===group&&row.value!==undefined));
+  const issues=[];
+  if(!data.year || result.yearInvalid) issues.push('請填有效的盤查年度。');
+  if(isPublic&&!rangeValid) issues.push('公開參考值適用 2024 或 2025 年。其他年度可改用自填區間。');
+  if(!isPublic&&!rangeValid) issues.push('請填有效的同規模參考上下限。只有一個參考值時，兩欄可填相同數字。');
+  if(dialysis){
+    if(!result.sessionsValid||result.scale.estimated) issues.push('請填同期間實際完成的透析次數。');
+    if(own===null) issues.push('請填妥透析服務排放並確認病人交通的納入方式。');
+    if(result.incomplete) issues.push('請修正待補或無效的透析排放項目。');
+  }else{
+    if(!hasScopeData) issues.push('範疇一及二各需有已計入的排放資料。');
+    if(scopeRows.some(row=>row.status!=='已計入'&&row.status!=='未填')) issues.push('請修正範疇一或二待補或無效的項目。');
+    if(basis==='beds'&&!result.scale.beds) issues.push('請填同年度院區住院床數。');
+    if(basis!=='beds'&&!validDays) issues.push('請填同年度實際住院人日。');
+  }
+  if(own!==null&&!Number.isFinite(own)) issues.push('試算強度超出計算範圍，請檢查活動數據。');
+  if(!peer.confirmed) issues.push('請確認完整性及可比性。');
+  const output=byId('peer-result');
+  output.dataset.level='';
+  const referenceText=rangeValid
+    ?'參考'+(low===high?'值 '+formatValue(low):'區間 '+formatValue(low)+'–'+formatValue(high))+' '+unit+'。':'';
+  if(issues.length||own===null||!Number.isFinite(own)){
+    output.textContent='暫無法判讀。 '+referenceText+issues.join(' ');
+    return;
+  }
+  const compared=isPublic?Number(own.toFixed(2)):own;
+  const isLower=compared<low, isHigher=compared>high;
+  output.dataset.level=isLower?'lower':isHigher?'higher':'within';
+  const label=isLower?'低於參考'+(low===high?'值':'區間'):isHigher?'高於參考'+(low===high?'值':'區間'):low===high?'與參考值相同':'落在參考區間內';
+  const edge=isLower?low:high;
+  const percent=(isLower||isHigher)&&edge>0?'（約 '+formatValue(Math.abs(compared-edge)/edge*100)+'%）':'';
+  output.textContent=(data.example?'示範結果 · ':'')+label+percent+'。您的試算 '+formatValue(compared)+' '+unit+'。'+referenceText;
+}
+function resetPeerConfirmation(data){
+  data.peer.confirmed=false;
+  byId('peer-confirm').checked=false;
+}
+for(const id of peerFields){
+  byId(id).addEventListener(id==='peer-basis'?'change':'input',event=>{
+    const data=state[mode];
+    data.peer[id]=event.target.value;
+    data.peer[id+'-bad']=event.target.validity.badInput;
+    if(id==='peer-basis'||id==='peer-low'||id==='peer-high') resetPeerConfirmation(data);
+    renderComparison(lastResult);
+  });
+}
+byId('peer-confirm').addEventListener('change',event=>{
+  state[mode].peer.confirmed=event.target.checked;
+  renderComparison(lastResult);
+});
 byId('travel-coverage').addEventListener('change',event=>{
-  state[mode].travelCoverage=event.target.value;
+  const data=state[mode];
+  data.travelCoverage=event.target.value;
+  resetPeerConfirmation(data);
   renderComparison(lastResult);
 });
 document.querySelectorAll('[data-mode]').forEach(tab => tab.addEventListener('click',() => {mode=tab.dataset.mode;render()}));
@@ -730,6 +842,7 @@ for(const id of ['year','sessions']){
     const data=state[mode];
     data[id]=event.target.value;
     data[id+'Bad']=event.target.validity.badInput;
+    if(id==='year') resetPeerConfirmation(data);
     if(id==='year' && Number(data.year)!==2025 && data.powerPreset){
       const row=data.groups[mode==='hospital'?1:0][0];
       row.factor='';
@@ -801,7 +914,7 @@ for(const example of examples){
   button.append(description);
   button.addEventListener('click',() => {
     const current=state[example.mode];
-    const hasInput=current.year||current.sessions||current.yearBad||current.sessionsBad||Object.values(current.scale).some(Boolean)||
+    const hasInput=current.year||current.sessions||current.yearBad||current.sessionsBad||Object.values(current.scale).some(Boolean)||Object.values(current.peer).some(Boolean)||
       current.groups.some(group => group.some(row => row.amount||row.factor||row.amountBad||row.factorBad||row.custom));
     if(hasInput && !confirm('載入案例將取代該試算模式的輸入，確定繼續？')) return;
     const data=emptyState(example.mode);
@@ -823,7 +936,7 @@ for(const example of examples){
 }
 byId('reset').addEventListener('click',() => {
   const data=state[mode];
-  if((lastResult.count||lastResult.incomplete||data.year||data.sessions||Object.values(data.scale).some(Boolean)||data.groups.some(group=>group.some(row=>row.custom))) && !confirm('確定清空本模式的輸入？')) return;
+  if((lastResult.count||lastResult.incomplete||data.year||data.sessions||Object.values(data.scale).some(Boolean)||Object.values(data.peer).some(Boolean)||data.groups.some(group=>group.some(row=>row.custom))) && !confirm('確定清空本模式的輸入？')) return;
   state[mode]=emptyState(mode);
   render();
 });

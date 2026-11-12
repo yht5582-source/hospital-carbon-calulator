@@ -90,6 +90,17 @@ input[aria-invalid=true]{border-color:#a23729;background:#fff2ef}
 .download{width:100%;margin-top:14px}
 button:disabled{cursor:default;opacity:.5}
 .compare-link{display:block;margin-top:11px;text-align:center;font-size:13px;font-weight:750}
+.advice{margin-top:22px;padding:18px 20px;scroll-margin-top:16px}
+.advice h2{font-size:20px}
+.advice p{font-size:13px;color:var(--muted);margin:5px 0 0}
+.advice-settings{margin:10px 0;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.advice-settings label{font-size:13px;font-weight:700}
+.advice-settings select{width:auto;min-width:80px}
+.advice-list{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,275px),1fr));gap:10px}
+.advice-item{padding:12px;border:1px solid var(--line);border-radius:9px;overflow-wrap:anywhere}
+.advice-item h3{font-size:15px}
+.advice-item .advice-metric{color:var(--green);font-weight:750}
+.advice-item .advice-saving{border-top:1px solid var(--line);margin-top:8px;padding-top:7px;color:var(--ink);font-weight:700}
 .comparison{margin-top:22px;padding:18px 20px;scroll-margin-top:16px}
 .comparison h2{font-size:20px}
 .comparison p{font-size:13px;color:var(--muted);margin:5px 0 0}
@@ -155,10 +166,28 @@ button:disabled{cursor:default;opacity:.5}
 <p id="status-note">空白代表未納入。已確認無排放來源時，可在活動量填 0。</p>
 </div>
 <button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
+<a class="compare-link" href="#advice">查看減碳建議 ↓</a>
 <a class="compare-link" href="#comparison">查看同類場域比較 ↓</a>
 </div>
 </aside>
 </div>
+<section class="card advice" id="advice" aria-labelledby="advice-title">
+<h2 id="advice-title">依您的數據提供減碳建議</h2>
+<p>按已計入的排放量排序，顯示最多三項優先檢視的來源。</p>
+<p id="advice-status"></p>
+<div class="advice-settings" id="advice-settings" hidden>
+<label for="reduction-percent">假設單一項目的排放降低</label>
+<select id="reduction-percent">
+<option value="5">5%</option><option value="10" selected>10%</option><option value="20">20%</option><option value="30">30%</option>
+</select>
+</div>
+<ol class="advice-list" id="advice-list"></ol>
+<div id="advice-notes" hidden>
+<p>各項獨立試算，假設其他排放與服務量維持相同。實際成效取決於措施、院方設備及使用情形。</p>
+<p>改善措施須符合感染管制、設備規範與照護品質。臨床流程由院內專業團隊評估。</p>
+<p><a href="https://www.who.int/publications/i/item/B09119/" target="_blank" rel="noopener noreferrer">WHO 醫療設施永續指引</a> · <a href="https://www.cgmh.org.tw/showroom/News/PressNews/260915002" target="_blank" rel="noopener noreferrer">林口長庚透析減碳案例</a></p>
+</div>
+</section>
 <section class="card comparison" id="comparison" aria-labelledby="comparison-title">
 <h2 id="comparison-title">公開案例比較</h2>
 <p class="compare-mode" id="compare-mode"></p>
@@ -271,6 +300,25 @@ const publicReferences = {
       source:'https://doi.org/10.1007/s12325-024-03039-w'
     }
   ]
+};
+const reductionActions = {
+  '天然氣':'由工務盤點鍋爐時程、保溫及熱水負載，以分區用量找出長時間待機或熱損失。',
+  '柴油':'分開記錄發電機測試與車輛用油，檢查可改善的車輛空轉及調度。依院方規定維持備援測試。',
+  '冷媒逸散':'按設備及冷媒種類核對維修與補充紀錄，優先檢漏並修復反覆補充的設備。',
+  '吸入性麻醉氣體':'由麻醉科盤點各氣體的採購、耗用與設備漏失，檢視可改善的設備維護及工作流程。',
+  '外購電力':'以電表或分區帳單找出高負載時段，由工務優先檢查空調主機、泵浦與照明。用月度用電量驗證改善。',
+  '外購蒸汽或熱能':'核對熱能使用量與設備時程，檢查管線保溫、漏損與熱回收可行性。',
+  '自來水':'核對分區水表並查找漏水。透析場域可另記錄逆滲透系統進水量與產水量，由工務評估用水效率。',
+  '委外醫療廢棄物處理':'與感控及廢棄物管理人員抽查分類，優先改善投放錯誤。依規定處理感染性廢棄物。',
+  '採購藥品與耗材':'按品項拆開採購量與碳係數，優先核對高排放品項，檢查庫存效期並向供應商索取可追溯的產品碳足跡。',
+  '用電':'分開量測透析機、逆滲透製水及分攤空調的用電，由工務與透析團隊檢查可改善的待機及設備效率。',
+  '透析器':'按型號核對採購與耗用量，向供應商取得產品碳足跡，盤點備品效期與未使用即報廢的原因。',
+  '血液迴路管組':'向供應商確認同規格管組與包裝的碳足跡，盤點庫存效期及未使用即報廢的耗材。',
+  '透析濃縮液':'核對採購、耗用、效期報廢及包材，與供應商比較同規格產品的包裝與配送資料。',
+  '其他耗材或藥品':'依品項拆分排放，找出貢獻最大的藥品或耗材，先檢查庫存效期、採購批量與供應商資料。',
+  '醫療廢棄物處理':'與感控人員抽查各類廢棄物的投放及秤重紀錄。依規定處理感染性廢棄物。',
+  '一般廢棄物處理':'抽查一般垃圾組成，在符合院內感控規範下評估乾淨包材的回收及減少包裝。',
+  '病人交通':'盤點往返距離與交通方式。與個案管理團隊評估接駁、共乘與排程可行性，兼顧就醫可近性。'
 };
 const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
 const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
@@ -489,7 +537,52 @@ function calculate(){
   byId('download').disabled=!count||!aggregateValid||yearInvalid;
   lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid};
   renderComparison(lastResult);
+  renderAdvice(lastResult);
 }
+function renderAdvice(result){
+  const dialysis=mode==='dialysis';
+  const positive=result.rows.filter(row=>row.value>0);
+  const leaders=positive.sort((a,b)=>b.value-a.value).slice(0,3);
+  const available=leaders.length>0&&Number.isFinite(result.total);
+  const percent=Number(byId('reduction-percent').value);
+  const list=byId('advice-list');
+  list.replaceChildren();
+  byId('advice-settings').hidden=!available;
+  byId('advice-notes').hidden=!available;
+  const messages=[];
+  if(state[mode].example) messages.push('目前依模擬案例產生建議。');
+  if(!available){
+    messages.push(leaders.length?'排放總量超出計算範圍，請檢查輸入。':'填入活動量與排放係數並算出正值後，即可查看建議。');
+  }else{
+    const unassessed=result.omitted+result.incomplete;
+    if(unassessed) messages.push('尚有 '+unassessed+' 項未填或無效，排序僅依已計入的項目。');
+    if(dialysis&&!result.sessionsValid) messages.push('尚未填妥治療次數，目前以同期總量呈現。');
+  }
+  byId('advice-status').hidden=messages.length===0;
+  byId('advice-status').textContent=messages.join(' ');
+  if(!available) return;
+
+  const divisor=dialysis?(result.sessionsValid?Number(state[mode].sessions):1):1000;
+  const unit=dialysis?(result.sessionsValid?'公斤 CO₂e／次':'公斤 CO₂e／同期'):'公噸 CO₂e／年';
+  for(const row of leaders){
+    const item=document.createElement('li');
+    item.className='advice-item';
+    const title=document.createElement('h3');
+    title.textContent=row.name.trim();
+    const metric=document.createElement('p');
+    metric.className='advice-metric';
+    metric.textContent=formatValue(row.value/divisor)+' '+unit+' · 占已計入總量 '+formatValue(row.value/result.total*100)+'%';
+    const action=document.createElement('p');
+    action.textContent=(!row.custom&&reductionActions[row.name])||
+      '先確認此項的活動量、單位與係數來源，再拆分設備、品項或流程，找出可優先改善的部分。';
+    const saving=document.createElement('p');
+    saving.className='advice-saving';
+    saving.textContent='此項若降低 '+percent+'%，可少排 '+formatValue(row.value*(percent/100)/divisor)+' '+unit;
+    item.append(title,metric,action,saving);
+    list.append(item);
+  }
+}
+byId('reduction-percent').addEventListener('change',()=>renderAdvice(lastResult));
 function renderComparison(result){
   const data=state[mode];
   const dialysis=mode==='dialysis';

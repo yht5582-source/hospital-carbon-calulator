@@ -36,6 +36,16 @@ header .button:hover{background:#245b4d}
 .example{white-space:normal;text-align:left;padding:9px 12px}
 .example span{display:block;font-weight:500;color:var(--muted);margin-top:2px}
 @media(max-width:540px){.example-grid{grid-template-columns:1fr}}
+.steps{list-style:none;display:flex;gap:6px;margin:20px 0 0;padding:0;counter-reset:none}
+.steps li{flex:1;min-width:0}
+.steps a{display:flex;align-items:center;gap:8px;height:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;text-decoration:none;font-weight:750;font-size:14px;color:var(--ink)}
+.steps a:hover{background:#eaf4ed}
+.steps b,.step-no{display:inline-grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--dark);color:#e3f4ce;font-size:13px}
+.step-no{margin-right:8px;vertical-align:2px}
+.advice .advice-gap{margin-top:10px;padding:9px 11px;border-radius:7px;background:#fff0e4;color:#763b15;font-weight:750}
+.advice .advice-gap[data-level="lower"],.advice .advice-gap[data-level="within"]{background:#e9f4e8;color:#145747}
+@media(max-width:540px){.steps a{flex-direction:column;gap:3px;text-align:center;font-size:12px;padding:7px 4px}}
+#calc{scroll-margin-top:16px}
 .tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin:20px 0 22px}
 .tab{border:0;border-bottom:3px solid transparent;background:transparent;padding:12px 17px;font-weight:750;color:var(--muted)}
 .tab[aria-pressed=true]{color:var(--green);border-bottom-color:var(--green);background:#e9f2e9;border-radius:8px 8px 0 0}
@@ -77,7 +87,8 @@ input[aria-invalid=true]{border-color:#a23729;background:#fff2ef}
 .custom-name{min-height:34px}
 .custom-unit{min-height:34px;margin-top:4px}
 .remove{display:block;margin:5px 0 0 auto;border:0;padding:0;background:none;color:#8b392d;font-size:12px;text-decoration:underline}
-.summary{position:sticky;top:16px}
+.summary{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain}
+.mini-total{display:none}
 .total{border-radius:13px 13px 0 0;background:var(--dark);color:#fff;padding:21px}
 .total h2{font-size:15px;color:#e0f0e5}
 .total strong{display:block;font-size:clamp(32px,4vw,49px);letter-spacing:-.045em;line-height:1.05;margin:11px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -143,6 +154,8 @@ button:disabled{cursor:default;opacity:.5}
 [hidden]{display:none!important}
 @media(max-width:950px){.wrap{width:calc(100% - 38px)}.layout{grid-template-columns:minmax(0,1fr) minmax(245px,285px);gap:14px}.row{padding-inline:12px;gap:7px;grid-template-columns:minmax(75px,1fr) minmax(60px,.8fr) minmax(65px,.85fr) minmax(65px,.65fr)}}
 @media(max-width:760px){.layout{display:flex;flex-direction:column}.layout>*{width:100%}.summary{position:static;order:-1}.total{padding:15px 18px}.breakdown{padding:12px 18px}.legend{gap:3px}.status{margin-top:9px;padding-top:7px}.download{margin-top:8px}header .wrap{display:block}.actions{margin-top:15px}header{padding:26px 0}.tabs{margin:13px 0}.wrap{width:calc(100% - 28px)}}
+@media(max-width:760px){.mini-total{position:fixed;left:12px;right:12px;bottom:12px;z-index:5;display:flex;align-items:baseline;gap:8px;border:0;border-radius:11px;background:var(--dark);color:#fff;padding:10px 14px;box-shadow:0 6px 18px rgb(0 0 0/.22);transform:translateY(140%);transition:transform .2s}.mini-total[data-show=true]{transform:none}.mini-total span{font-size:12px;color:#d0e2d8}.mini-total b{font-size:20px;font-variant-numeric:tabular-nums;margin-left:auto}.summary{max-height:none;overflow:visible}main{padding-bottom:64px}}
+@media(prefers-reduced-motion:reduce){.mini-total{transition:none}}
 @media(max-width:480px){.row{grid-template-columns:1fr 1fr;padding:10px 13px}.row h3,.custom-title{grid-column:1/-1}.row output{grid-column:1/-1;text-align:left}.col-label{display:none}.field-caption{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}.custom-title{display:grid;grid-template-columns:1fr 1fr;gap:6px}.custom-unit{margin:0}.tabs .tab{flex:1;padding-inline:5px}.context-fields .button{width:100%}}
 </style>
 </head>
@@ -155,7 +168,8 @@ button:disabled{cursor:default;opacity:.5}
 <p>選擇案例即可載入數據。四例皆為模擬資料，係數含假設值，適合核對操作與計算。</p>
 <div class="example-grid" id="example-buttons"></div>
 </section>
-<nav class="tabs" aria-label="試算模式"><button class="tab" type="button" data-mode="hospital" aria-pressed="true">全院年度排放</button><button class="tab" type="button" data-mode="dialysis" aria-pressed="false">血液透析服務</button></nav>
+<ol class="steps" aria-label="使用流程"><li><a href="#calc"><b>1</b>計算碳排量</a></li><li><a href="#comparison"><b>2</b>比較同規模機構</a></li><li><a href="#advice"><b>3</b>減排建議</a></li></ol>
+<nav class="tabs" aria-label="試算模式" id="calc"><button class="tab" type="button" data-mode="hospital" aria-pressed="true">全院年度排放</button><button class="tab" type="button" data-mode="dialysis" aria-pressed="false">血液透析服務</button></nav>
 <div class="layout">
 <section aria-label="試算資料">
 <div class="card context">
@@ -205,30 +219,13 @@ button:disabled{cursor:default;opacity:.5}
 <p id="summary-peer-result"></p>
 </div>
 <button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
-<a class="compare-link" href="#advice">查看減碳建議 ↓</a>
-<a class="compare-link" href="#comparison">查看同規模排放比較 ↓</a>
+<a class="compare-link" href="#comparison">② 比較同規模機構 ↓</a>
+<a class="compare-link" href="#advice">③ 查看減排建議 ↓</a>
 </div>
 </aside>
 </div>
-<section class="card advice" id="advice" aria-labelledby="advice-title">
-<h2 id="advice-title">依您的數據提供減碳建議</h2>
-<p>按已計入的排放量排序，顯示最多三項優先檢視的來源。</p>
-<p id="advice-status"></p>
-<div class="advice-settings" id="advice-settings" hidden>
-<label for="reduction-percent">假設單一項目的排放降低</label>
-<select id="reduction-percent">
-<option value="5">5%</option><option value="10" selected>10%</option><option value="20">20%</option><option value="30">30%</option>
-</select>
-</div>
-<ol class="advice-list" id="advice-list"></ol>
-<div id="advice-notes" hidden>
-<p>各項獨立試算，假設其他排放與服務量維持相同。實際成效取決於措施、院方設備及使用情形。</p>
-<p>改善措施須符合感染管制、設備規範與照護品質。臨床流程由院內專業團隊評估。</p>
-<p><a href="https://www.who.int/publications/i/item/B09119/" target="_blank" rel="noopener noreferrer">WHO 醫療設施永續指引</a> · <a href="https://www.cgmh.org.tw/showroom/News/PressNews/260915002" target="_blank" rel="noopener noreferrer">林口長庚透析減碳案例</a></p>
-</div>
-</section>
 <section class="card comparison" id="comparison" aria-labelledby="comparison-title">
-<h2 id="comparison-title">公開案例比較</h2>
+<h2 id="comparison-title"><span class="step-no">2</span>比較同規模機構</h2>
 <p class="compare-mode" id="compare-mode"></p>
 <p id="compare-guidance"></p>
 <div class="comparison-controls" id="travel-controls" hidden>
@@ -268,6 +265,24 @@ button:disabled{cursor:default;opacity:.5}
 <p class="compare-status" id="compare-status"></p>
 <p id="compare-standard"></p>
 </section>
+<section class="card advice" id="advice" aria-labelledby="advice-title">
+<h2 id="advice-title"><span class="step-no">3</span>減排建議</h2>
+<p>依步驟 1 的排放量排序，顯示最多三項優先檢視的來源，並對照步驟 2 的比較結果。</p>
+<p class="advice-gap" id="advice-gap" hidden></p>
+<p id="advice-status"></p>
+<div class="advice-settings" id="advice-settings" hidden>
+<label for="reduction-percent">假設單一項目的排放降低</label>
+<select id="reduction-percent">
+<option value="5">5%</option><option value="10" selected>10%</option><option value="20">20%</option><option value="30">30%</option>
+</select>
+</div>
+<ol class="advice-list" id="advice-list"></ol>
+<div id="advice-notes" hidden>
+<p>各項獨立試算，假設其他排放與服務量維持相同。實際成效取決於措施、院方設備及使用情形。</p>
+<p>改善措施須符合感染管制、設備規範與照護品質。臨床流程由院內專業團隊評估。</p>
+<p><a href="https://www.who.int/publications/i/item/B09119/" target="_blank" rel="noopener noreferrer">WHO 醫療設施永續指引</a> · <a href="https://www.cgmh.org.tw/showroom/News/PressNews/260915002" target="_blank" rel="noopener noreferrer">林口長庚透析減碳案例</a></p>
+</div>
+</section>
 <details class="card method" id="method">
 <summary>計算方法與係數來源</summary>
 <p>各項排放量＝活動量 × 以 kg CO₂e 表示的對應排放係數。全院年度合計以公噸呈現（1 公噸＝1,000 公斤）。透析服務以同期排放量除以完成的透析治療次數。係數已包含 CO₂e 換算時，毋須再乘全球暖化潛勢。</p>
@@ -280,6 +295,7 @@ button:disabled{cursor:default;opacity:.5}
 <p>試算資料只在目前頁面處理，重新整理即清空。需要留存時可下載 CSV。</p>
 </details>
 </main>
+<button class="mini-total" id="mini-total" type="button" data-show="false" aria-hidden="true" tabindex="-1"><span id="mini-label"></span><b id="mini-value">—</b><span id="mini-unit"></span></button>
 <script>
 'use strict';
 const byId = id => document.getElementById(id);
@@ -382,6 +398,8 @@ const reductionActions = {
 };
 const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
 const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
+const percentFormat = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:1});
+const formatPercent = value => (value > 0 && value < 0.1 ? '<0.1' : percentFormat.format(value))+'%';
 const peerFields=['peer-basis','peer-days','peer-low','peer-high'];
 const hospitalPeerRates={2024:33.67,2025:33.18};
 const scaleFields=['beds','chairs','monthly','months'];
@@ -599,6 +617,9 @@ function calculate(){
   const mainResult=count&&aggregateValid&&(!dialysis||sessionsValid)?(dialysis?total/sessions:total/1000):null;
   byId('year').setAttribute('aria-invalid',String(yearInvalid));
   byId('total').textContent=mainResult===null?'—':formatValue(mainResult);
+  byId('mini-label').textContent=dialysis?'每次透析':'年度排放';
+  byId('mini-value').textContent=byId('total').textContent;
+  byId('mini-unit').textContent=dialysis?'kg CO₂e／次':'t CO₂e／年';
   byId('secondary').hidden=!(dialysis&&count&&aggregateValid);
   byId('secondary').textContent='同期合計 '+(aggregateValid?formatValue(total):'—')+' 公斤 CO₂e';
   const capacity=[];
@@ -617,6 +638,8 @@ function calculate(){
   if(data.example) messages.push('示範案例「'+data.example+'」含假設係數，僅供操作練習。');
   if(data.message) messages.push(data.message);
   if(yearInvalid) messages.push('請輸入有效的西元年度。');
+  const presetMismatch=data.powerPreset&&data.year!==''&&!yearInvalid&&year!==2025;
+  if(presetMismatch) messages.push('電力係數 0.467 為 2025 年值，與目前年度不同，請確認或改填相符係數。');
   byId('mode-message').textContent=messages.join(' ');
   const legend=byId('legend');
   legend.replaceChildren();
@@ -632,12 +655,15 @@ function calculate(){
     const value=document.createElement('b');
     const divisor=dialysis?1:1000;
     const unit=dialysis?' kg':' t';
-    value.textContent=included[i]&&aggregateValid?formatValue(subtotals[i]/divisor)+unit+(total>0?' · '+formatValue(percent)+'%':''):'—';
+    value.textContent=included[i]&&aggregateValid?formatValue(subtotals[i]/divisor)+unit+(total>0?' · '+formatPercent(percent):''):'—';
     entry.append(dot,label,value);
     legend.append(entry);
   });
   byId('download').disabled=!count||!aggregateValid||yearInvalid;
-  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid,scale,perBed,scopeTotal,yearInvalid};
+  lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid,scale,perBed,scopeTotal,yearInvalid,presetMismatch};
+  refreshAnalysis();
+}
+function refreshAnalysis(){
   renderComparison(lastResult);
   renderAdvice(lastResult);
 }
@@ -661,6 +687,17 @@ function renderAdvice(result){
     if(dialysis&&!result.sessionsValid) messages.push('尚未填妥治療次數，目前以同期總量呈現。');
     if(dialysis&&result.scale.estimated) messages.push('每次減量以估計治療次數換算。');
   }
+  const gap=byId('advice-gap');
+  gap.hidden=!available;
+  gap.dataset.level=peerOutcome?.level??'';
+  if(available){
+    if(!peerOutcome) gap.textContent='步驟 2 尚無法判讀，以下建議僅依排放量排序。完成比較後會顯示與參考值的差距。';
+    else if(peerOutcome.level==='higher'){
+      const need=(peerOutcome.own-peerOutcome.high)/peerOutcome.own*100;
+      gap.textContent='步驟 2：您的強度 '+formatValue(peerOutcome.own)+' '+peerOutcome.unit+'，高於參考'+(peerOutcome.low===peerOutcome.high?'值':'上限')+'。'+
+        (dialysis?'每次排放':'範疇一＋二排放')+'約需降低 '+formatPercent(need)+' 才能回到參考'+(peerOutcome.low===peerOutcome.high?'值':'區間')+'。';
+    }else gap.textContent='步驟 2：您的強度 '+formatValue(peerOutcome.own)+' '+peerOutcome.unit+(peerOutcome.level==='lower'?'，已低於參考。':'，落在參考區間內。')+'以下建議用於持續改善。';
+  }
   byId('advice-status').hidden=messages.length===0;
   byId('advice-status').textContent=messages.join(' ');
   if(!available) return;
@@ -674,7 +711,7 @@ function renderAdvice(result){
     title.textContent=row.name.trim();
     const metric=document.createElement('p');
     metric.className='advice-metric';
-    metric.textContent=formatValue(row.value/divisor)+' '+unit+' · 占已計入總量 '+formatValue(row.value/result.total*100)+'%';
+    metric.textContent=formatValue(row.value/divisor)+' '+unit+' · 占已計入總量 '+formatPercent(row.value/result.total*100);
     const action=document.createElement('p');
     action.textContent=(!row.custom&&reductionActions[row.name])||
       '先確認此項的活動量、單位與係數來源，再拆分設備、品項或流程，找出可優先改善的部分。';
@@ -764,7 +801,9 @@ function renderComparison(result){
   standard.replaceChildren(link,' 規範量化與報告方法。表中公開數值供參考，沒有通用的合格門檻。');
   renderPeerComparison(result,ownWithout,ownWith,travel);
 }
+let peerOutcome=null;
 function renderPeerComparison(result,ownWithout,ownWith,travel){
+  peerOutcome=null;
   const data=state[mode];
   const dialysis=mode==='dialysis';
   const peer=data.peer;
@@ -841,13 +880,14 @@ function renderPeerComparison(result,ownWithout,ownWith,travel){
   output.dataset.level=isLower?'lower':isHigher?'higher':'within';
   const label=isLower?'低於參考'+(low===high?'值':'區間'):isHigher?'高於參考'+(low===high?'值':'區間'):low===high?'與參考值相同':'落在參考區間內';
   const edge=isLower?low:high;
-  const percent=(isLower||isHigher)&&edge>0?'（約 '+formatValue(Math.abs(compared-edge)/edge*100)+'%）':'';
+  const percent=(isLower||isHigher)&&edge>0?'（約 '+formatPercent(Math.abs(compared-edge)/edge*100)+'）':'';
   const qualifier=crossYear?'跨年度初步參考 · ':isPublic?'初步判讀 · ':'';
   const headline=(data.example?'示範 · ':'')+qualifier+label+percent;
   output.textContent=headline+'。您的試算 '+formatValue(compared)+' '+unit+'。'+referenceText+
-    (crossYear?'年度不同，電力係數及營運條件可能改變。':'');
+    (crossYear?'年度不同，電力係數及營運條件可能改變。':'')+(result.presetMismatch?'電力係數仍為 2025 年值，請確認。':'');
   summary.textContent=headline+'。'+formatValue(compared)+' '+unit+'。';
   summary.dataset.level=output.dataset.level;
+  peerOutcome={level:output.dataset.level,own:compared,high,low,unit,example:Boolean(data.example)};
 }
 function resetPeerConfirmation(data){
   data.peer.confirmed=false;
@@ -859,18 +899,18 @@ for(const id of peerFields){
     data.peer[id]=event.target.value;
     data.peer[id+'-bad']=event.target.validity.badInput;
     if(id==='peer-basis'||id==='peer-low'||id==='peer-high') resetPeerConfirmation(data);
-    renderComparison(lastResult);
+    refreshAnalysis();
   });
 }
 byId('peer-confirm').addEventListener('change',event=>{
   state[mode].peer.confirmed=event.target.checked;
-  renderComparison(lastResult);
+  refreshAnalysis();
 });
 byId('travel-coverage').addEventListener('change',event=>{
   const data=state[mode];
   data.travelCoverage=event.target.value;
   resetPeerConfirmation(data);
-  renderComparison(lastResult);
+  refreshAnalysis();
 });
 document.querySelectorAll('[data-mode]').forEach(tab => tab.addEventListener('click',() => {mode=tab.dataset.mode;render()}));
 for(const id of ['year','sessions']){
@@ -879,14 +919,7 @@ for(const id of ['year','sessions']){
     data[id]=event.target.value;
     data[id+'Bad']=event.target.validity.badInput;
     if(id==='year') resetPeerConfirmation(data);
-    if(id==='year' && Number(data.year)!==2025 && data.powerPreset){
-      const row=data.groups[mode==='hospital'?1:0][0];
-      row.factor='';
-      const view=rowViews.find(view=>view.row===row);
-      view.factor.value='';
-      data.powerPreset=false;
-      data.message='年度已變更，請填入相符的電力係數。';
-    }
+    if(id==='year' && data.powerPreset) data.message='';
     calculate();
   });
 }
@@ -915,6 +948,7 @@ byId('preset').addEventListener('click',() => {
     calculate();
     return;
   }
+  if(data.year!=='2025') resetPeerConfirmation(data);
   data.year='2025';
   const row=data.groups[mode==='hospital'?1:0][0];
   row.factor='0.467';
@@ -1018,6 +1052,18 @@ byId('download').addEventListener('click',() => {
   anchor.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
+document.addEventListener('wheel',event=>{
+  const target=event.target;
+  if(target instanceof HTMLInputElement&&target.type==='number'&&target===document.activeElement) target.blur();
+},{passive:true});
+const totalPanel=document.querySelector('.total');
+const miniTotal=byId('mini-total');
+if('IntersectionObserver' in window){
+  new IntersectionObserver(([entry])=>{
+    miniTotal.dataset.show=String(!entry.isIntersecting&&entry.boundingClientRect.top<0);
+  }).observe(totalPanel);
+}
+miniTotal.addEventListener('click',()=>totalPanel.scrollIntoView({behavior:'smooth',block:'start'}));
 render();
 </script>
 </body>

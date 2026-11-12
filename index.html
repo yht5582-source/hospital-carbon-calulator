@@ -89,6 +89,23 @@ input[aria-invalid=true]{border-color:#a23729;background:#fff2ef}
 .status p+p{margin-top:6px}
 .download{width:100%;margin-top:14px}
 button:disabled{cursor:default;opacity:.5}
+.compare-link{display:block;margin-top:11px;text-align:center;font-size:13px;font-weight:750}
+.comparison{margin-top:22px;padding:18px 20px;scroll-margin-top:16px}
+.comparison h2{font-size:20px}
+.comparison p{font-size:13px;color:var(--muted);margin:5px 0 0}
+.comparison .compare-mode{font-weight:700;color:var(--green)}
+.comparison-controls{margin-top:12px;max-width:410px}
+.comparison-controls label{font-size:13px;font-weight:700;display:block;margin-bottom:4px}
+.compare-table{width:100%;border-collapse:collapse;margin:14px 0 8px;font-size:13px;text-align:left}
+.compare-table th,.compare-table td{padding:10px 12px;vertical-align:top;border-bottom:1px solid var(--line)}
+.compare-table thead th{background:#e9f2e9;color:var(--green)}
+.compare-table tbody th{font-weight:700}
+.compare-table small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:2px}
+.compare-table td{font-variant-numeric:tabular-nums}
+.compare-table td:last-child{font-weight:750}
+.compare-table tr:last-child>*{border-bottom:0}
+.comparison .compare-status{background:#f3f6f2;border-radius:7px;padding:8px 10px;margin:8px 0}
+@media(max-width:540px){.comparison{padding:13px 11px}.compare-table th,.compare-table td{padding:8px 5px}.compare-table{font-size:12px}.compare-table small{font-size:11px}}
 .method{margin:22px 0 38px;padding:16px 19px}
 .method summary{cursor:pointer;font-weight:750}
 .method p,.method ul{margin:9px 0;font-size:13px;color:var(--muted)}
@@ -138,9 +155,30 @@ button:disabled{cursor:default;opacity:.5}
 <p id="status-note">空白代表未納入。已確認無排放來源時，可在活動量填 0。</p>
 </div>
 <button class="button download" id="download" type="button" disabled>下載試算明細（CSV）</button>
+<a class="compare-link" href="#comparison">查看同類場域比較 ↓</a>
 </div>
 </aside>
 </div>
+<section class="card comparison" id="comparison" aria-labelledby="comparison-title">
+<h2 id="comparison-title">公開案例比較</h2>
+<p class="compare-mode" id="compare-mode"></p>
+<p id="compare-guidance"></p>
+<div class="comparison-controls" id="travel-controls" hidden>
+<label for="travel-coverage">病人往返交通填報狀態</label>
+<select id="travel-coverage" aria-describedby="travel-note">
+<option value="unknown">尚未確認</option>
+<option value="included">已完整填入「病人交通」欄</option>
+<option value="excluded">本次盤查排除病人交通</option>
+</select>
+<p id="travel-note">有多種交通方式時，可在「病人交通」欄填入合計人公里及依人公里加權的排放係數。</p>
+</div>
+<table class="compare-table">
+<thead><tr><th scope="col">來源與盤查邊界</th><th scope="col">公開參考值</th><th scope="col">您的試算</th></tr></thead>
+<tbody id="compare-rows"></tbody>
+</table>
+<p class="compare-status" id="compare-status"></p>
+<p id="compare-standard"></p>
+</section>
 <details class="card method" id="method">
 <summary>計算方法與係數來源</summary>
 <p>各項排放量＝活動量 × 以 kg CO₂e 表示的對應排放係數。全院年度合計以公噸呈現（1 公噸＝1,000 公斤）。透析服務以同期排放量除以完成的透析治療次數。係數已包含 CO₂e 換算時，毋須再乘全球暖化潛勢。</p>
@@ -187,21 +225,57 @@ const examples = [
   },
   {
     mode:'dialysis', name:'透析中心（院內流程）',
-    description:'血液透析 · 同期 36,000 次治療',
+    description:'血液透析 · 同期 36,000 次治療', travelCoverage:'excluded',
     sessions:36000,
     values:[[[144000,0.467],[6500,0.2]],[[36000,1.8],[36000,0.8],[27000,0.4],[12,300]],[[18000,0.9],[5000,0.35],[0,'']]]
   },
   {
     mode:'dialysis', name:'透析中心（含病人交通）',
-    description:'血液透析 · 同期 12,000 次治療，納入 216,000 人公里',
+    description:'血液透析 · 同期 12,000 次治療，納入 216,000 人公里', travelCoverage:'included',
     sessions:12000,
     values:[[[54000,0.467],[2400,0.2]],[[12000,1.8],[12000,0.8],[9600,0.4],[4,300]],[[6600,0.9],[1800,0.35],[216000,0.15]]]
   }
 ];
+const publicReferences = {
+  hospital:[
+    {
+      name:'中國醫藥大學北港附設醫院', value:'4,731.10',
+      boundary:'2024 年，北港院區範疇一＋二。報告為自主盤查。',
+      source:'https://www2.bh.cmu.edu.tw/FileUploads/FileUpload/2024CMUBH_ESGreoprt.pdf'
+    },
+    {
+      name:'國軍臺中總醫院', value:'3,284.073',
+      boundary:'2025 年，院方揭露的範疇一＋二。',
+      source:'https://803.mnd.gov.tw/esg/performance-management/environment-management/'
+    },
+    {
+      name:'國立成功大學醫學院附設醫院', value:'30,658.56',
+      boundary:'2025 年，院方揭露的類別一＋二，涵蓋住院、門診及其他指定設施。',
+      source:'https://esg.hosp.ncku.edu.tw/p/412-1110-31154.php?Lang=zh-tw'
+    }
+  ],
+  dialysis:[
+    {
+      name:'林口長庚紀念醫院', value:'17.77', basis:'excluded',
+      boundary:'2026 年公布，標準 4 小時血液透析。病人交通另作情境分析。',
+      source:'https://www.cgmh.org.tw/showroom/News/PressNews/260915002'
+    },
+    {
+      name:'歐洲四家透析中心', value:'11.7–31.4', basis:'included',
+      boundary:'西班牙、荷蘭、義大利與波蘭，納入病人及員工交通。以研究的年度數值除以 156 次，每次 4 小時。',
+      source:'https://pubmed.ncbi.nlm.nih.gov/42610222/'
+    },
+    {
+      name:'十國慢性腎臟病照護模型', value:'20.9–43.9', basis:'included',
+      boundary:'院內血液透析模型，含病人交通。治療 4 小時，另計 1 小時等候的空調與照明。',
+      source:'https://doi.org/10.1007/s12325-024-03039-w'
+    }
+  ]
+};
 const format = new Intl.NumberFormat('zh-TW',{maximumFractionDigits:3});
 const formatValue = value => value > 0 && (value < 0.001 || value >= 1e12) ? value.toExponential(2) : format.format(value);
 const emptyState = mode => ({
-  year:'', yearBad:false, powerPreset:false, sessions:'', sessionsBad:false, example:'', message:'',
+  year:'', yearBad:false, powerPreset:false, sessions:'', sessionsBad:false, travelCoverage:'unknown', example:'', message:'',
   groups:configurations[mode].groups.map(([, , rows]) => rows.map(([name,unit]) => ({
     name,unit,amount:'',factor:'',amountBad:false,factorBad:false,custom:false
   })))
@@ -306,6 +380,8 @@ function render(){
   byId('year').value = data.year;
   byId('sessions').value = data.sessions;
   byId('sessions-label').hidden = !dialysis;
+  byId('travel-controls').hidden = !dialysis;
+  byId('travel-coverage').value = data.travelCoverage;
   byId('result-title').textContent = dialysis?'每次透析已計入排放':'已計入的年度排放';
   byId('result-unit').textContent = dialysis?'公斤 CO₂e／次':'公噸 CO₂e／年';
   rowViews=[];
@@ -412,7 +488,88 @@ function calculate(){
   });
   byId('download').disabled=!count||!aggregateValid||yearInvalid;
   lastResult={total,mainResult,rows,count,omitted,incomplete,sessionsValid};
+  renderComparison(lastResult);
 }
+function renderComparison(result){
+  const data=state[mode];
+  const dialysis=mode==='dialysis';
+  const unit=dialysis?'公斤 CO₂e／次':'公噸 CO₂e／年';
+  byId('compare-mode').textContent=(dialysis?'每次血液透析':'年度範疇一＋二')+' · '+unit;
+  byId('compare-guidance').textContent=dialysis
+    ?'以相近的治療時數與生命週期邊界對照。透析耗材、藥品、設備、廢水、員工交通及電力係數等差異仍會影響數值。'
+    :'以相同年度、院區邊界及範疇一＋二對照。年排放總量反映院區規模與服務量，評估效率需使用定義一致的排放強度。';
+  const included=result.rows.filter(row => row.value!==undefined);
+  const hospitalRows=dialysis?[]:result.rows.filter(row => row.groupIndex<2);
+  const hospitalIncluded=hospitalRows.filter(row=>row.value!==undefined);
+  const scopeTotal=hospitalIncluded.reduce((sum,row)=>sum+row.value,0)/1000;
+  const travelRow=dialysis?result.rows.find(row=>row.groupIndex===2 && row.name==='病人交通' && !row.custom):null;
+  const travel=travelRow?.value;
+  const serviceRows=included.filter(row=>row!==travelRow);
+  const serviceTotal=serviceRows.reduce((sum,row)=>sum+row.value,0);
+  const canCompareService=result.sessionsValid&&serviceRows.length>0&&Number.isFinite(serviceTotal);
+  const sessions=Number(data.sessions);
+  const ownScope=hospitalIncluded.length&&Number.isFinite(scopeTotal)?scopeTotal:null;
+  const ownWithout=canCompareService?serviceTotal/sessions:null;
+  const ownWith=canCompareService&&data.travelCoverage==='included'&&travel!==undefined&&Number.isFinite(result.total)
+    ?result.total/sessions:null;
+
+  const table=byId('compare-rows');
+  table.replaceChildren();
+  for(const reference of publicReferences[mode]){
+    const tr=document.createElement('tr');
+    const th=document.createElement('th');
+    th.scope='row';
+    const link=document.createElement('a');
+    link.href=reference.source;
+    link.target='_blank';
+    link.rel='noopener noreferrer';
+    link.textContent=reference.name;
+    const boundary=document.createElement('small');
+    boundary.textContent=reference.boundary;
+    th.append(link,boundary);
+    const published=document.createElement('td');
+    published.textContent=reference.value;
+    const own=document.createElement('td');
+    const ownValue=dialysis?(reference.basis==='included'?ownWith:ownWithout):ownScope;
+    own.textContent=ownValue===null?'—':formatValue(ownValue);
+    if(ownValue!==null){
+      const basis=document.createElement('small');
+      basis.textContent=dialysis
+        ?(reference.basis==='included'?'含「病人交通」欄':'扣除「病人交通」欄')
+        :'已計入的範疇一＋二';
+      own.append(basis);
+    }
+    tr.append(th,published,own);
+    table.append(tr);
+  }
+
+  const messages=[];
+  if(data.example) messages.push('目前顯示模擬案例。');
+  if(dialysis){
+    if(!canCompareService) messages.push('填入有效的同期治療次數及至少一項服務排放後，才會顯示您的數值。');
+    if(ownWith===null) messages.push('含病人交通的對照需填妥「病人交通」欄，並確認已完整填報。');
+    if(data.travelCoverage==='excluded' && travel>0) messages.push('目前「病人交通」欄有正值，請確認盤查邊界設定。');
+    if(result.omitted+result.incomplete>0) messages.push('尚有 '+(result.omitted+result.incomplete)+' 個項目未填或無效，請核對應納入的排放。');
+  }else{
+    if(ownScope===null) messages.push('填入範疇一或二的活動量與係數後，即可查看已計入的小計。');
+    const missing=hospitalRows.length-hospitalIncluded.length;
+    if(missing) messages.push('範疇一＋二尚有 '+missing+' 個項目未填或無效，請先核對排放源。');
+    if(!data.year || data.yearBad || !byId('year').validity.valid) messages.push('請確認盤查年度。');
+  }
+  byId('compare-status').hidden=messages.length===0;
+  byId('compare-status').textContent=messages.join(' ');
+  const standard=byId('compare-standard');
+  const link=document.createElement('a');
+  link.href=dialysis?'https://www.iso.org/standard/71206.html':'https://www.iso.org/standard/66453.html';
+  link.target='_blank';
+  link.rel='noopener noreferrer';
+  link.textContent=dialysis?'ISO 14067':'ISO 14064-1';
+  standard.replaceChildren(link,' 規範量化與報告方法。表中公開數值供參考，沒有通用的合格門檻。');
+}
+byId('travel-coverage').addEventListener('change',event=>{
+  state[mode].travelCoverage=event.target.value;
+  renderComparison(lastResult);
+});
 document.querySelectorAll('[data-mode]').forEach(tab => tab.addEventListener('click',() => {mode=tab.dataset.mode;render()}));
 for(const id of ['year','sessions']){
   byId(id).addEventListener('input',event => {
@@ -479,6 +636,7 @@ for(const example of examples){
     data.year='2025';
     data.sessions=String(example.sessions??'');
     data.example=example.name;
+    data.travelCoverage=example.travelCoverage??'unknown';
     data.powerPreset=true;
     data.groups.forEach((group,i) => group.forEach((row,j) => {
       [row.amount,row.factor]=example.values[i][j].map(String);
